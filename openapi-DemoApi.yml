@@ -1,0 +1,47 @@
+openapi: "3.0.2"
+info:
+  title: "DemoApi"
+  version: "1.0"
+servers:
+  - url: "https://${DemoApi}.execute-api.ap-northeast-1.amazonaws.com/{basePath}"
+    variables:
+      basePath:
+        default: "Prod"
+paths:
+  /demo/{pathparam}:
+    get:
+      parameters:
+        - name: "queryparam"
+          in: "query" # query/path/header/cookie から選択、OAS3.0から"body"は廃止
+          required: true
+          schema:
+            type: string
+        - name: "pathparam"
+          in: "path"
+          required: true
+          schema:
+            type: string
+      responses: # OAS3.0から"default"は廃止
+        200:
+          description: "200 ok"
+
+      # Lambda統合の設定
+      x-amazon-apigateway-integration:
+        uri:
+          Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${DemoFunction.Alias}/invocations
+        passthroughBehavior: "when_no_match"
+        httpMethod: "POST" # Lambda 関数の呼び出しでは、値は POST である必要あり
+        timeoutInMillis: 1000
+        type: "aws_proxy" # AWS Lambda 関数との統合の場合、aws_proxy
+        cacheKeyParameters: # キャッシュを利用する場合のキー項目の設定
+          ["method.request.querystring.queryparam", "method.request.path.pathparam"]
+components: {}
+
+### カスタムレスポンス設定
+x-amazon-apigateway-gateway-responses:
+  INTEGRATION_TIMEOUT:
+    statusCode: 200 # タイムアウトの場合はエラーとしない対応
+    responseParameters:
+      gatewayresponse.header.X-TIMEOUT-CUSTOM-HEADER: "'api-gateway-timeout'" # 見分けやすいよう独自ヘッダーを付ける
+    responseTemplates:
+      application/json: '{"message":$context.error.messageString}'

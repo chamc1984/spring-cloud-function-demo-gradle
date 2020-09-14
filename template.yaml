@@ -1,0 +1,287 @@
+AWSTemplateFormatVersion: "2010-09-09" # CFnでなくSAMテンプレートであることの明示
+Transform: AWS::Serverless-2016-10-31 # AWS::Serverless というプレフィックスの Type のリソースを、CloudFormation の本来の文法に変換する
+Description: >
+  sam-app-20200524
+
+  Sample SAM Template for sam-app-20200524
+
+# SAR用のMetaData
+Metadata:
+  AWS::ServerlessRepo::Application:
+    Name: sar-test-app # SAR上の定義名
+    Description: hello world # SAR上の説明文
+    Author: user1 # アプリケーションの公開に際して使用する名前
+    LicenseUrl: sam-docs/LICENSE.txt # LICENSE.txtのファイルパス
+    ReadmeUrl: sam-docs/README.md # README.mdのファイルパス
+    Labels: ['tests'] # SAR上で検索しやすくするためのラベル
+    SemanticVersion: 0.0.1
+    SpdxLicenseId: MIT # オープンソース対応の Software Package Data Exchange ライセンス
+    # HomePageUrl: https://github.com/user1/my-app-project #not required、アプリケーションの詳細情報、GitHubのURLなど
+    # SourceCodeUrl: https://github.com/user1/my-app-project #not required、アプリケーションの詳細情報、GitHubのURLなど
+
+Parameters:
+  Env:
+    Type: String
+    AllowedValues:
+      - dev
+      - prd
+    Default: dev
+  Stage: # API Gateway 用のステージ定義
+    Type: String
+    Default: Prod
+  DeployType: # Lambda 用の CodeDeploy のデプロイタイプ定義
+    Type: String
+    AllowedValues:
+      - all
+      - canary
+      - linear
+    Default: all
+  # 以下、パラメータストアから取得する環境依存変数の定義
+  SecurityGroupId:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/SecurityGroupId
+  SubnetId1:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/SubnetId1
+  SubnetId2:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/SubnetId2
+  LambdaExecRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/LambdaExecRoleArn
+  SAMRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/SAMRoleArn
+  HooksRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/HooksRoleArn
+  SubscriptionFunctionArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/SubscriptionFunctionArn
+  WarmupExecRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/WarmupExecRoleArn
+  APIGWtoCWLRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/APIGWtoCWLRoleArn
+
+Mappings:
+  EnvMap:
+    dev:
+      SpringProfile: "dev"
+      CacheEnabled: false
+    prd:
+      SpringProfile: "prd"
+      CacheEnabled: true
+  DeployTypeMap:
+    all:
+      Type: "AllAtOnce"
+    canary:
+      Type: "Canary10Percent5Minutes"
+    linear:
+      Type: "Linear10PercentEvery1Minute"
+
+### Global Settings
+Globals:
+  Function:
+    CodeUri: build/distributions/spring-cloud-function-demo-gradle.zip
+    Handler: com.example.springcloudfunctiondemo.handler.ApiGatewayEventProxyIntegrationHandler::handleRequest
+    Runtime: java8
+    MemorySize: 512
+    Timeout: 20
+    Tracing: Active # X-Ray有効化
+    ### 環境変数の設定
+    Environment:
+      Variables:
+        SPRING_PROFILES_ACTIVE: !FindInMap [EnvMap, !Ref Env, SpringProfile] # SpringProfileの指定
+        # JAVA_TOOL_OPTIONS: -Xms511M -Xmx512M # JVM起動オプション。XmsとXmxを同値にすると起動エラーとなるため少しずらす
+    ### VPC Lambdaの設定(subnetはprivateであること)
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref SecurityGroupId
+      SubnetIds:
+        - !Ref SubnetId1
+        - !Ref SubnetId2
+    ### LambdaLayersの設定（指定のみ、詳細はResourcesに定義）
+    Layers:
+      - !Ref DemoFunctionCoreLayer
+    ### CodeDeployの設定
+    AutoPublishAlias: live # Lambdaのエイリアス名 NOTE: 途中で変更すると変更前のエイリアスは削除される
+    DeploymentPreference:
+      Enabled: true
+      Type: !FindInMap [DeployTypeMap, !Ref DeployType, Type]
+      Role: !Ref SAMRoleArn
+      #Hooks:
+      #  PreTraffic: PreTrafficFunc.Arn
+  Api:
+    OpenApiVersion: 3.0.2
+    EndpointConfiguration: REGIONAL # デフォルトはEDGE
+    CacheClusterEnabled: !FindInMap [EnvMap, !Ref Env, CacheEnabled] # キャッシュ有効化
+    CacheClusterSize: "0.5" # 0.5、1.6、6.1、13.5、28.4、58.2、118、237 のうちいずれかを選択
+    AccessLogSetting: # NOTE: アクセスログのFormat定義は改行できない（公式ドキュメントより）
+      DestinationArn: !GetAtt DemoApiAccessLogGroup.Arn
+      Format: '{"requestTime":"$context.requestTime", "requestId":"$context.requestId", "extendedRequestId":"$context.extendedRequestId", "xrayTraceId":"$context.xrayTraceId", "sourceIp":"$context.identity.sourceIp", "httpMethod":"$context.httpMethod", "resourcePath":"$context.resourcePath", "status":"$context.status", "protocol":"$context.protocol", "responseLength":"$context.responseLength", "errorResponseType":"$context.error.responseType", "errorResponseMessage":"$context.error.message" }'
+    MethodSettings:
+      - ResourcePath: "/*" # パスを特定しない
+        HttpMethod: "*" # メソッドを特定しない
+        LoggingLevel: INFO # CloudWatch Logsの有効化（INFO/ERROR）※OFFで無効化
+        MetricsEnabled: true # CloudWatch Metricsの有効化
+        CachingEnabled: !FindInMap [EnvMap, !Ref Env, CacheEnabled] # キャッシュ有効化
+        CacheTtlInSeconds: 30 # キャッシュ有効期限(秒) default 300, Max 3600, TTL=0 はキャッシュ無効
+        CacheDataEncrypted: false # キャッシュされたレスポンスが暗号化されているかどうか
+        # NOTE: perKeyInvalidationは、SAMだとサポートされていない
+    TracingEnabled: true
+
+Resources:
+  DemoApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: DemoApi
+      StageName: !Ref Stage
+      #Domain: DomainConfiguration # NOTE : カスタムドメインをSAMで定義する場合は有効化（Route53の権限なども必要なため、手動定義がベストかも）
+      #  BasePath:
+      #  - /Prod
+      #  CertificateArn: arn-example
+      #  DomainName: www.example.com
+      #  EndpointConfiguration: EDGE # EDGE or REGIONAL のみ対応
+      #  Route53:
+      #      HostedZoneId: xyz # ドメイン名の HostedZoneId
+      #      DistributionDomainName: xyz # カスタムドメイン名のカスタムディストリビューション
+      #      EvaluateTargetHealth: true # true の場合、エイリアスレコードは参照される AWS リソースの正常性を継承する。デフォルトは false
+      DefinitionBody:
+        Fn::Transform:
+          Name: AWS::Include
+          Parameters:
+            Location: ./openapi-DemoApi.yml # OpenAPIドキュメントを利用することで、タイムアウトなど細かい定義ができるようになる
+
+  DemoFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      #FunctionName: DemoFunction # NOTE: 名称を固定にすると、スタックを複製した時に生成できなくなる
+      Role: !Ref LambdaExecRoleArn
+      Environment:
+        Variables:
+          FUNCTION_NAME: apiGatewayEventProxyIntegrationFunction
+          PARAM1: VALUE # ダミー環境変数
+      Events: # NOTE: EventsにApiを定義することで、Lambda側のポリシーにApiGatewayからのInvokeFunctionが付与される（個別にポリシー定義するよりこっちの方がシンプルで楽）
+        DemoEvent:
+          Type: Api
+          Properties:
+            RestApiId: !Ref DemoApi # NOTE: RestApiIdを指定しない場合、SAMが自動生成する
+            Path: /demo/{pathparam}
+            Method: GET
+
+  # Lambda Layers
+  DemoFunctionCoreLayer:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      CompatibleRuntimes:
+        - java8
+      Description: Layer Description
+      ContentUri: "build/layer"
+    MetaData:
+      BuildMethod: java8
+
+  ### Lambda用ロググループ
+  DemoFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${DemoFunction}
+      RetentionInDays: 14 # ログ保持期間、デフォルトは無制限
+    #DeletionPolicy: Retain # Retainにすると、スタックを削除してもログは消えない
+
+  ### Lambdaロググループ用サブスクリプション
+  DemoFunctionSubscriptionFilter:
+    Type: AWS::Logs::SubscriptionFilter
+    Properties:
+      DestinationArn: !Ref SubscriptionFunctionArn
+      FilterPattern: "" # 無条件フィルター
+      LogGroupName: !Ref DemoFunctionLogGroup
+
+  ### APIGatewayアクセスログ用ロググループ
+  DemoApiAccessLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/apigateway/accesslog/${DemoApi}
+      RetentionInDays: 14 # ログ保持期間、デフォルトは無制限
+    #DeletionPolicy: Retain # Retainにすると、スタックを削除してもログは消えない
+
+  ### APIGatewayアクセスログ用Role指定
+  ApiGatewayToCloudWatchLogsRole:
+    Type: AWS::ApiGateway::Account
+    Properties:
+      CloudWatchRoleArn: !Ref APIGWtoCWLRoleArn
+
+  ### APIGateway実行ログ用ロググループ
+  DemoApiExecutionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Sub: API-Gateway-Execution-Logs_${DemoApi}/${Stage}
+
+  ### PreTraffic用Lambda
+  # PreTrafficFunc:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Role: !Ref HooksRoleArn
+  #     FunctionName: CodeDeployHook_PreTraffic
+  #     Runtime: python3.8
+  #     Handler: index.handler
+  #     CodeUri: script/handlers/pre-traffic-func
+  #     Policies:
+  #       - Version: 2012-10-17
+  #         Statement:
+  #           - Effect: Allow
+  #             Action:
+  #               - codedeploy:PutLifecycleEventHookExecutionStatus
+  #             Resource: "*"
+  #           - Effect: Allow
+  #             Action:
+  #               - lambda:InvokeFunction
+  #             Resource: !GetAtt DemoFunction.Arn
+  #     Tracing: PassThrough
+  #     DeploymentPreference:
+  #       Enabled: false
+  #     Environment:
+  #       Variables:
+  #         FUNCTION_NAME: !Ref DemoFunction
+  #         IS_CALLBACK: "true"
+  ### warmup用Lambda
+  # WarmupFunction:
+  #   Type: AWS::Serverless::Function
+  #   Properties:
+  #     Role: !Ref WarmupExecRoleArn
+  #     Runtime: nodejs12.x
+  #     CodeUri: scripts/_warmup
+  #     Handler: scripts/_warmup/index.warmUp
+  #     Environment:
+  #       Variables:
+  #         TARGET_FUNCTION_NAME: !Ref DemoFunction
+  #         TARGET_ALIAS: live
+  #         WARMUP_CONCURRENCY: 3
+  #     Events:
+  #       CloudWatchEvent:
+  #         Type: Schedule
+  #         Properties:
+  #           Schedule: rate(5 minutes)
+  #     MemorySize: 128
+  #     Timeout: 20
+  #     Tracing: PassThrough
+
+### NOTE: ここで何かが生成されるわけではなく、CFnの実行結果の表示領域と思われる（例えば、ApiGatewayのURLなどは、ここでOutputsしなくても実物は生成されているが、表示しておいた方が嬉しい。）
+### NOTE: それか、ここに書いておくと、他のテンプレートで呼び出せるとどこかで読んだような（要出典）
+Outputs:
+  DemoApi:
+    Description: "API Gateway endpoint URL for Prod stage for Hello World function"
+    Value: !Sub "https://${DemoApi}.execute-api.${AWS::Region}.amazonaws.com/${Stage}/demo/"
+
+  DemoFunction:
+    Description: "Hello World Lambda Function ARN"
+    #Value: !GetAtt DemoFunction.Arn
+    Value: !Ref DemoFunction
+    # TODO: Importして使われていると、別Stackを立てようとした時にエラーになる
+    # Export:
+    #   Name: TargetFuncName
+  # WarmupFunction:
+  #   Description: "warmup-test"
+  #   Value: !GetAtt WarmupFunction.Arn

@@ -1,0 +1,53 @@
+plugins {
+	id 'org.springframework.boot' version '2.3.3.RELEASE'
+	id 'io.spring.dependency-management' version '1.0.10.RELEASE'
+	id 'java'
+}
+
+group = 'spring-cloud-function-demo-gradle'
+sourceCompatibility = '1.8'
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation("org.springframework.boot:spring-boot-starter")
+	compile("org.springframework.cloud:spring-cloud-starter-function-web:2.1.1.RELEASE")
+	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")
+	compile("com.amazonaws:aws-lambda-java-events:2.2.7")
+	compile("com.amazonaws:aws-lambda-java-core:1.2.0")
+	compileOnly("org.projectlombok:lombok")
+	annotationProcessor("org.projectlombok:lombok")
+	testImplementation('org.springframework.boot:spring-boot-starter-test') {
+		exclude group: 'org.junit.vintage', module: 'junit-vintage-engine'
+	}
+
+	// bootJarが必要な場合はここを有効化
+	//bootJar.enabled = true
+	//bootJar {
+	//    launchScript()
+	//}
+
+	// zipファイルを生成
+	task buildZip(type: Zip) {
+		from compileJava
+		from processResources
+		// LambdaLayersの場合はここは不要
+		//into('lib') {
+		//	from configurations.runtime
+		//}
+	}
+
+	// LambdaLayersのため、ライブラリを集約
+	task buildLayer(type: Copy) {
+		into "$buildDir/layer/java/lib"
+		from configurations.runtime
+	}
+	build.dependsOn buildZip, buildLayer
+
+}
+
+test {
+	useJUnitPlatform()
+}

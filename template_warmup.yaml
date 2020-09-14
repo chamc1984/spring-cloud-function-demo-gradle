@@ -1,0 +1,36 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: lambda warmup function.
+
+Parameters:
+  # 以下、パラメータストアから取得する環境依存変数の定義
+  WarmupExecRoleArn:
+    Type: AWS::SSM::Parameter::Value<String>
+    Default: /SpringCloudFunctionDemo/WarmupExecRoleArn
+
+Resources:
+  ### warm-up用Lambda
+  WarmupFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !Ref WarmupExecRoleArn
+      Runtime: nodejs12.x
+      CodeUri: scripts/_warmup
+      Handler: index.warmUp
+      Environment:
+        Variables:
+          TARGET_FUNCTION_NAME: !ImportValue TargetFuncName
+          TARGET_ALIAS: live
+          WARMUP_CONCURRENCY: 3
+      Events:
+        CloudWatchEvent:
+          Type: Schedule
+          Properties:
+            Schedule: rate(5 minutes)
+      MemorySize: 128
+      Timeout: 20
+
+Outputs:
+  WarmupFunction:
+    Description: "warmup-test"
+    Value: !GetAtt WarmupFunction.Arn
