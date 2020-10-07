@@ -1,5 +1,6 @@
 plugins {
-	id 'org.springframework.boot' version '2.3.3.RELEASE'
+	//id 'org.springframework.boot' version '2.3.4.RELEASE'
+	id 'org.springframework.boot' version '2.4.0-M3'
 	id 'io.spring.dependency-management' version '1.0.10.RELEASE'
 	id 'java'
 }
@@ -8,13 +9,32 @@ group = 'spring-cloud-function-demo-gradle'
 sourceCompatibility = '1.8'
 
 repositories {
+	maven { url 'https://repo.spring.io/snapshot' }
+	maven { url 'https://repo.spring.io/milestone' }
 	mavenCentral()
+}
+
+ext {
+	set('springCloudVersion', "2020.0.0-SNAPSHOT")
+	set('springCloudFunctionVersion', "3.1.0-M3")
+}
+
+dependencyManagement {
+	imports {
+		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+		mavenBom "org.springframework.cloud:spring-cloud-function-dependencies:${springCloudFunctionVersion}"
+	}
 }
 
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
-	compile("org.springframework.cloud:spring-cloud-starter-function-web:2.1.1.RELEASE")
-	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")
+	implementation("org.springframework.cloud:spring-cloud-function-context")
+	compile("org.springframework.cloud:spring-cloud-starter-function-web")
+	compile("org.springframework.cloud:spring-cloud-function-adapter-aws")
+//	compile("org.springframework.cloud:spring-cloud-starter-function-web:2.1.1.RELEASE")
+//	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")
+	compile("org.springframework.experimental:spring-graalvm-native:0.8.2-SNAPSHOT")
+	compile("org.springframework.boot:spring-boot-starter-webflux")
 	compile("com.amazonaws:aws-lambda-java-events:2.2.7")
 	compile("com.amazonaws:aws-lambda-java-core:1.2.0")
 	compileOnly("org.projectlombok:lombok")
@@ -24,10 +44,10 @@ dependencies {
 	}
 
 	// bootJarが必要な場合はここを有効化
-	//bootJar.enabled = true
-	//bootJar {
-	//    launchScript()
-	//}
+	bootJar.enabled = true
+	bootJar {
+	    launchScript()
+	}
 
 	// zipファイルを生成
 	task buildZip(type: Zip) {
