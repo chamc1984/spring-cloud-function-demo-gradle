@@ -29,7 +29,8 @@ dependencyManagement {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.cloud:spring-cloud-function-context")
-	compile("org.springframework.cloud:spring-cloud-starter-function-web")
+//	compile("org.springframework.cloud:spring-cloud-starter-function-web")
+	compile("org.springframework.cloud:spring-cloud-function-web")
 	compile("org.springframework.cloud:spring-cloud-function-adapter-aws")
 //	compile("org.springframework.cloud:spring-cloud-starter-function-web:2.1.1.RELEASE")
 //	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")

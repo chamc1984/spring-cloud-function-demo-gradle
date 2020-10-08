@@ -3,3 +3,10 @@ spring:
     function:
       scan:
         packages: com.example.springcloudfunctiondemo.function
+    web:
+      export:
+        enabled: true
+        debug: false
+  main:
+    web-application-type: none
+
