@@ -16,7 +16,7 @@ repositories {
 
 ext {
 	set('springCloudVersion', "2020.0.0-SNAPSHOT")
-	set('springCloudFunctionVersion', "3.1.0-M3")
+	set('springCloudFunctionVersion', "3.1.0-M4")
 }
 
 dependencyManagement {
@@ -36,6 +36,7 @@ dependencies {
 //	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")
 	compile("org.springframework.experimental:spring-graalvm-native:0.8.2-SNAPSHOT")
 	compile("org.springframework.boot:spring-boot-starter-webflux")
+	compile("org.awaitility:awaitility")
 	compile("com.amazonaws:aws-lambda-java-events:2.2.7")
 	compile("com.amazonaws:aws-lambda-java-core:1.2.0")
 	compileOnly("org.projectlombok:lombok")
