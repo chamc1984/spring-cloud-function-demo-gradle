@@ -1,5 +1,4 @@
 plugins {
-	//id 'org.springframework.boot' version '2.3.4.RELEASE'
 	id 'org.springframework.boot' version '2.4.0-M3'
 	id 'io.spring.dependency-management' version '1.0.10.RELEASE'
 	id 'java'
@@ -15,13 +14,14 @@ repositories {
 }
 
 ext {
-	set('springCloudVersion', "2020.0.0-SNAPSHOT")
-	set('springCloudFunctionVersion', "3.1.0-M4")
+//	set('springCloudVersion', "2020.0.0-SNAPSHOT")
+	set('springCloudFunctionVersion', "3.1.0-M3")
 }
 
 dependencyManagement {
 	imports {
-		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
+//		mavenBom "org.springframework.boot:spring-boot-starter-parent:2.4.0-M3"
+//		mavenBom "org.springframework.cloud:spring-cloud-dependencies:${springCloudVersion}"
 		mavenBom "org.springframework.cloud:spring-cloud-function-dependencies:${springCloudFunctionVersion}"
 	}
 }
@@ -29,11 +29,9 @@ dependencyManagement {
 dependencies {
 	implementation("org.springframework.boot:spring-boot-starter")
 	implementation("org.springframework.cloud:spring-cloud-function-context")
-//	compile("org.springframework.cloud:spring-cloud-starter-function-web")
+	compile("org.springframework.cloud:spring-cloud-starter-function-web")
 	compile("org.springframework.cloud:spring-cloud-function-web")
 	compile("org.springframework.cloud:spring-cloud-function-adapter-aws")
-//	compile("org.springframework.cloud:spring-cloud-starter-function-web:2.1.1.RELEASE")
-//	compile("org.springframework.cloud:spring-cloud-function-adapter-aws:2.1.1.RELEASE")
 	compile("org.springframework.experimental:spring-graalvm-native:0.8.2-SNAPSHOT")
 	compile("org.springframework.boot:spring-boot-starter-webflux")
 	compile("org.awaitility:awaitility")
